@@ -1,0 +1,45 @@
+# Set up the virtual machine
+1 download Virtual Box from Oracle https://www.virtualbox.org/
+2 Execute the Virtual Box installler and if a window pops up asking for the Microsoft Visual C++ Redistributable Package, continue with step 2a, otherwise follow the installation process and skip 2a.
+2a Open the link https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170#latest-microsoft-visual-c-redistributable-version, scroll down to "Latest Microsoft Visual C++ Redistributable Version" and download the right .exe file for your laptop (for windows probably https://aka.ms/vs/17/release/vc_redist.x64.exe) and execute the installer, then retry the Virtual Box installation.
+3 download the virtual machine
+4 open Virtual Box and click on the green plus ("Add")
+5 Navigate to the downloaded virtual machine
+6 in Virtual Box click on Start and wait for Ubuntu to boot
+7 login (username: genomics. password: 1234)
+
+# move to the "Documents" directory where you will find all needed data
+cd Documents
+
+# Check the quality of the read files which are in the folder "reads" for one of the samples
+fastqc ./reads/sample3.1.fq.gz ./reads/sample3.2.fq.gz -o ./fastqc
+
+# Index the reference genome which is located in the folder "bwa_ref_index"
+bwa-mem2 index ./bwa_ref_index/GCF_901000735.1_CavTom2PMs-1.0_genomic_chr1.fna
+
+# Align the reads to the reference genome
+bwa-mem2 mem -R "@RG\tID:Sample3\tSM:sample3" ./bwa_ref_index/GCF_901000735.1_CavTom2PMs-1.0_genomic_chr1.fna ./reads/sample3.1.fq.gz ./reads/sample3.2.fq.gz > sample3.sam
+
+# Convert the recently produced sam file to the smaller bam file format
+samtools view -b sample3.sam -o sample3.bam
+
+# Filter the bam for a minimum quality of 5
+samtools view -q 5 sample3.bam -o sample3_q5.bam
+
+# Sort bam file
+samtools sort sample3_q5.bam -o sample3_q5.sorted.bam
+
+# Index bam file
+samtools index sample3_q5.sorted.bam
+
+# The alignment and procesing of the alignment files would need to be repeated for all samples. For time restrictions, you find 6 prepared bam files in the bam folder. For these 6 samples which come all from different regions in the world, we call variants and produce a vcf file.
+# Call variants with stacks (two-step process)
+gstacks -B ./bam/sample1_q5.sorted.bam -B ./bam/sample2_q5.sorted.bam -B ./bam/sample3_q5.sorted.bam -B ./bam/sample4_q5.sorted.bam -B ./bam/sample5_q5.sorted.bam -B ./bam/sample6_q5.sorted.bam -O ./stacks/gstacks/
+populations -P ./stacks/gstacks/ -O ./stacks/populations/ -M ./stacks/populationmap.txt --vcf --min-samples-overall=0.75 --max-obs-het=0.8
+
+# make a newick neighborjoining tree file from the vcf in tassel
+# type "start_tassel.pl" into terminal
+# in the newly opened window click on file --> open as and then chose Format = vcf, tick "sort positions", click ok and browse to the populations.snps.vcf file (Documents --> stacks --> populations)
+# click on analysis --> relatedness --> create tree and then choose Clustering Method = Neighbor_Joining and click ok
+# click on file --> save as and choose Format = Newick and browse to the location where to store the file (Documents --> R) and name the file "tree"
+
